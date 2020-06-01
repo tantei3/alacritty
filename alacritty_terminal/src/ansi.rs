@@ -87,9 +87,19 @@ pub struct Processor {
     parser: vte::Parser,
 }
 
+use crate::sixel::SixelDecoder;
+
+impl Default for ProcessorState {
+    fn default() -> Self {
+        ProcessorState::Empty
+    }
+}
+
 /// Internal state for VTE processor.
-struct ProcessorState {
-    preceding_char: Option<char>,
+enum ProcessorState {
+    Empty,
+    PrecedingChar(char),
+    SixelData(SixelDecoder)
 }
 
 /// Helper type that implements `vte::Perform`.
@@ -116,7 +126,8 @@ impl<'a, H: Handler + 'a, W: io::Write> Performer<'a, H, W> {
 
 impl Default for Processor {
     fn default() -> Processor {
-        Processor { state: ProcessorState { preceding_char: None }, parser: vte::Parser::new() }
+        Processor { state: ProcessorState::default(),
+                    parser: vte::Parser::new() }
     }
 }
 
@@ -759,7 +770,7 @@ where
     #[inline]
     fn print(&mut self, c: char) {
         self.handler.input(c);
-        self.state.preceding_char = Some(c);
+        *self.state = ProcessorState::PrecedingChar(c);
     }
 
     #[inline]
@@ -779,6 +790,11 @@ where
 
     #[inline]
     fn hook(&mut self, params: &Params, intermediates: &[u8], ignore: bool, action: char) {
+        if action == 'q' {
+            *self.state = ProcessorState::SixelData(SixelDecoder::new());
+            dbg!("hooking SIXEL");
+            return;
+        }
         debug!(
             "[unhandled hook] params={:?}, ints: {:?}, ignore: {:?}, action: {:?}",
             params, intermediates, ignore, action
@@ -787,12 +803,27 @@ where
 
     #[inline]
     fn put(&mut self, byte: u8) {
-        debug!("[unhandled put] byte={:?}", byte);
+        match self.state {
+            ProcessorState::SixelData(parser) => parser.put(byte),
+            _ => {
+                debug!("[unhandled put] byte={:?}", byte);
+            }
+        }
     }
 
     #[inline]
     fn unhook(&mut self) {
-        debug!("[unhandled unhook]");
+        let state = std::mem::take(self.state);
+
+        match state {
+            ProcessorState::SixelData(sixel) => {
+                dbg!("SIXEL DONE");
+                dbg!(sixel.xsize);
+                dbg!(sixel.ysize);
+                let rgb = sixel.into_rgb();
+            },
+            _ => debug!("[unhandled unhook]")
+        }
     }
 
     // TODO replace OSC parsing with parser combinators.
@@ -983,7 +1014,7 @@ where
             },
             ('B', None) | ('e', None) => handler.move_down(Line(next_param_or(1) as usize)),
             ('b', None) => {
-                if let Some(c) = self.state.preceding_char {
+                if let ProcessorState::PrecedingChar(c) = *self.state {
                     for _ in 0..next_param_or(1) {
                         handler.input(c);
                     }
