@@ -17,6 +17,8 @@ mod storage;
 mod tests;
 
 pub use self::row::Row;
+pub use self::row::GraphicsCell;
+pub use self::row::GraphicsRow;
 use self::storage::Storage;
 
 pub trait GridCell: Sized {
@@ -117,7 +119,7 @@ pub struct Grid<T> {
 
     /// Lines in the grid. Each row holds a list of cells corresponding to the
     /// columns in that row.
-    raw: Storage<T>,
+    pub raw: Storage<T>,
 
     /// Number of columns.
     cols: Column,

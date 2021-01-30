@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 
 use crate::ansi::{Color, NamedColor};
-use crate::grid::{self, GridCell};
+use crate::grid::{self, GridCell, GraphicsCell};
 use crate::index::Column;
 
 bitflags! {
@@ -24,6 +24,7 @@ bitflags! {
         const STRIKEOUT                 = 0b0000_0010_0000_0000;
         const LEADING_WIDE_CHAR_SPACER  = 0b0000_0100_0000_0000;
         const DOUBLE_UNDERLINE          = 0b0000_1000_0000_0000;
+        const GRAPHICS                  = 0b0001_0000_0000_0000;
     }
 }
 
@@ -42,6 +43,12 @@ impl<T: Copy> ResetDiscriminant<T> for T {
 impl ResetDiscriminant<Color> for Cell {
     fn discriminant(&self) -> Color {
         self.bg
+    }
+}
+
+impl GraphicsCell for Cell {
+    fn set_graphics_flag(&mut self) {
+        self.flags.insert(Flags::GRAPHICS);
     }
 }
 

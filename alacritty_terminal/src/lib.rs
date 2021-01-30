@@ -17,6 +17,7 @@ pub mod thread;
 pub mod tty;
 pub mod vi_mode;
 pub mod sixel;
+pub mod graphics;
 
 pub use crate::grid::Grid;
 pub use crate::term::Term;

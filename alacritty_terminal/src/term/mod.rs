@@ -15,7 +15,8 @@ use crate::ansi::{
 };
 use crate::config::Config;
 use crate::event::{Event, EventListener};
-use crate::grid::{Dimensions, DisplayIter, Grid, Scroll};
+use crate::graphics::Graphics;
+use crate::grid::{Dimensions, Grid, DisplayIter, Scroll, GraphicsRow};
 use crate::index::{self, Boundary, Column, Direction, IndexRange, Line, Point, Side};
 use crate::selection::{Selection, SelectionRange};
 use crate::term::cell::{Cell, Flags, LineLength};
@@ -276,6 +277,9 @@ pub struct Term<T> {
     /// Information about cell dimensions.
     cell_width: usize,
     cell_height: usize,
+
+    /// Counter for number of images added so far, monotonically increasing num
+    image_counter: usize,
 }
 
 impl<T> Term<T> {
@@ -320,6 +324,7 @@ impl<T> Term<T> {
             selection: None,
             cell_width: size.cell_width as usize,
             cell_height: size.cell_height as usize,
+            image_counter: 0,
         }
     }
 
@@ -1740,6 +1745,28 @@ impl<T: EventListener> Handler for Term<T> {
     #[inline]
     fn text_area_size_chars<W: io::Write>(&mut self, writer: &mut W) {
         let _ = write!(writer, "\x1b[8;{};{}t", self.screen_lines(), self.cols());
+    }
+
+    #[inline]
+    fn add_graphics(&mut self, rgb: Vec<u8>, width: usize, height: usize) {
+        dbg!("Sixel image parsed with width {} and height {}", width, height);
+        let cursor = &self.grid.cursor;
+        let current_col = cursor.point.column;
+        let cell_height = self.cell_height;
+        let cell_width = self.cell_width;
+        let required_num_rows = ((height as f64) / (cell_height as f64)).ceil() as u16;
+        let required_num_cols = ((width as f64) / (cell_width as f64)).ceil() as usize;
+        let graphics_object = Graphics { id: self.image_counter, rgb, width: width as u16, height: height as u16, cell_height: cell_height as u16 };
+        let graphics_object = Arc::new(graphics_object);
+        for offset_y in 0..required_num_rows {
+            let cursor = &self.grid.cursor;
+            let current_line = cursor.point.line;
+            let row = &mut self.grid[current_line];
+            let graphics_row = GraphicsRow { raw: graphics_object.clone(), start_column: current_col, offset_y };
+            row.add_graphics(graphics_row, required_num_cols);
+            self.linefeed();
+        }
+        self.image_counter += 1;
     }
 }
 

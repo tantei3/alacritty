@@ -5,12 +5,14 @@ use std::ops::{Index, IndexMut};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo, RangeToInclusive};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::grid::GridCell;
 use crate::index::Column;
 use crate::term::cell::ResetDiscriminant;
+use crate::graphics::Graphics;
 
 /// A row in the grid.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
@@ -22,6 +24,20 @@ pub struct Row<T> {
     /// This is the upper bound on the number of elements in the row, which have been modified
     /// since the last reset. All cells after this point are guaranteed to be equal.
     pub(crate) occ: usize,
+
+    pub graphics: Option<GraphicsRow>,
+}
+
+/// A graphics containing row
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct GraphicsRow {
+    pub raw: Arc<Graphics>,
+
+    /// First column where the image is rendered
+    pub start_column: Column,
+
+    /// Offset from the top of the image
+    pub offset_y: u16,
 }
 
 impl<T: PartialEq> PartialEq for Row<T> {
@@ -52,7 +68,7 @@ impl<T: Clone + Default> Row<T> {
             inner.set_len(columns.0);
         }
 
-        Row { inner, occ: 0 }
+        Row { inner, occ: 0, graphics: None }
     }
 
     /// Increase the number of columns in the row.
@@ -111,6 +127,21 @@ impl<T: Clone + Default> Row<T> {
         }
 
         self.occ = 0;
+
+        self.graphics = None;
+    }
+}
+
+pub trait GraphicsCell {
+    fn set_graphics_flag(&mut self);
+}
+
+impl<T: GraphicsCell> Row<T> {
+    pub fn add_graphics(&mut self, graphics: GraphicsRow, num_cols: usize) {
+        for cell in self.inner.iter_mut().skip(graphics.start_column.0).take(num_cols) {
+            cell.set_graphics_flag();
+        }
+        self.graphics = Some(graphics);
     }
 }
 
@@ -118,7 +149,7 @@ impl<T: Clone + Default> Row<T> {
 impl<T> Row<T> {
     #[inline]
     pub fn from_vec(vec: Vec<T>, occ: usize) -> Row<T> {
-        Row { inner: vec, occ }
+        Row { inner: vec, occ, graphics: None }
     }
 
     #[inline]

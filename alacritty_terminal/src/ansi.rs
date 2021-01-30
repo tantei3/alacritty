@@ -342,6 +342,9 @@ pub trait Handler {
 
     /// Report text area size in characters.
     fn text_area_size_chars<W: io::Write>(&mut self, _: &mut W) {}
+
+    /// Add graphics image
+    fn add_graphics(&mut self, _: Vec<u8>, _: usize, _: usize) {}
 }
 
 /// Terminal cursor configuration.
@@ -820,7 +823,10 @@ where
                 dbg!("SIXEL DONE");
                 dbg!(sixel.xsize);
                 dbg!(sixel.ysize);
+                let width = sixel.xsize;
+                let height = sixel.ysize;
                 let rgb = sixel.into_rgb();
+                self.handler.add_graphics(rgb, width, height);
             },
             _ => debug!("[unhandled unhook]")
         }
