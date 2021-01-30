@@ -25,8 +25,10 @@ use crate::display::content::RenderableCell;
 use crate::gl;
 use crate::gl::types::*;
 use crate::renderer::rects::{RectRenderer, RenderRect};
+use crate::renderer::image::{ImageRenderer};
 
 pub mod rects;
+pub mod image;
 
 // Shader source.
 static TEXT_SHADER_F: &str = include_str!("../../res/text.f.glsl");
@@ -439,6 +441,7 @@ pub struct QuadRenderer {
     batch: Batch,
 
     rect_renderer: RectRenderer,
+    pub img_renderer: ImageRenderer,
 }
 
 #[derive(Debug)]
@@ -645,6 +648,7 @@ impl QuadRenderer {
             current_atlas: 0,
             active_tex: 0,
             batch: Batch::new(),
+            img_renderer: ImageRenderer::new()?,
         };
 
         let atlas = Atlas::new(ATLAS_SIZE);

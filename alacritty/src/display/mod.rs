@@ -27,7 +27,7 @@ use alacritty_terminal::event::{EventListener, OnResize};
 use alacritty_terminal::grid::Dimensions as _;
 use alacritty_terminal::index::{Column, Direction, Line, Point};
 use alacritty_terminal::selection::Selection;
-use alacritty_terminal::term::{SizeInfo, Term, TermMode, MIN_COLS, MIN_SCREEN_LINES};
+use alacritty_terminal::term::{SizeInfo, Term, TermMode, MIN_COLS, MIN_SCREEN_LINES, cell::Flags};
 
 use crate::config::font::Font;
 use crate::config::window::Dimensions;
@@ -482,6 +482,17 @@ impl Display {
         }
         let background_color = content.color(NamedColor::Background as usize);
         let display_offset = content.display_offset();
+        let mut graphics_rows = Vec::new();
+        let grid = terminal.grid();
+        let limit = grid.display_offset();
+        let offset = limit + *grid.screen_lines() - 1;
+
+        // Collecting rows with renderable images
+        for (line_num, line) in (limit..=offset).rev().enumerate() {
+            if grid.raw[line].graphics.is_some() {
+                graphics_rows.push((line_num, grid.raw[line].clone()));
+            }
+        }
         let cursor = content.cursor();
 
         let cursor_point = terminal.grid().cursor.point;
@@ -537,6 +548,23 @@ impl Display {
                     api.render_cell(cell, glyph_cache);
                 }
             });
+        }
+
+        // Image rendering loop
+        for (line_num, row) in graphics_rows.iter() {
+            let graphics = row.graphics.as_ref().unwrap();
+            let id = graphics.raw.id;
+            let start_col = graphics.start_column;
+            let tex_id = match self.renderer.img_renderer.get_tex_id(id) {
+                Some(num) => *num,
+                None => self.renderer.img_renderer.add_img(&graphics.raw)
+            };
+            for column_num in start_col.0..size_info.cols().0 {
+                let cell_instance = &row[Column(column_num)];
+                if cell_instance.flags.contains(Flags::GRAPHICS) {
+                    self.renderer.img_renderer.draw(&size_info, &graphics, *line_num, column_num, tex_id);
+                }
+            }
         }
 
         let mut rects = lines.rects(&metrics, &size_info);
